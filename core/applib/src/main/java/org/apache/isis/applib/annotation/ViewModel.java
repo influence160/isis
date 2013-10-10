@@ -19,21 +19,29 @@
 
 package org.apache.isis.applib.annotation;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Inherited;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
 
 /**
- * Indicates that a domain object is intended to be used as a view model,
- * such that any changes to its structure will be backwardly compatible.
- * 
- * <p>
- * Originally introduced to support the json-viewer's RESTful support.
+ * Indicates that a domain object is intended to be used as a view model.
  */
-@Inherited
-@Target({ ElementType.TYPE })
-@Retention(RetentionPolicy.RUNTIME)
-public @interface ViewModel {
+public interface ViewModel {
+
+    /**
+     * Obtain a memento of the view model.
+     *
+     * <p>
+     * Typically this will be the identifier of a backing domain entity, but it could also be an arbitrary string,
+     * for example a bunch of JSON.
+     * 
+     * <p>
+     * This method is called by the framework in order that the view model may be recreated subsequently
+     * through {@link #viewModelInit(String)}.
+     */
+    @Hidden
+    public String viewModelMemento();
+    
+    /**
+     * Used to re-initialize a view model with a memento obtained from {@link #viewModelMemento()}.
+     */
+    @Hidden
+    public void viewModelInit(String memento);
 }

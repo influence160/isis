@@ -19,22 +19,31 @@
 package org.apache.isis.viewer.wicket.ui.components.collectioncontents.ajaxtable;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 import org.apache.wicket.extensions.markup.html.repeater.data.table.DataTable;
 import org.apache.wicket.markup.html.link.AbstractLink;
 import org.apache.wicket.markup.html.link.Link;
 
+import org.apache.isis.applib.annotation.Bulk;
+import org.apache.isis.applib.annotation.Bulk.InteractionContext;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager.ConcurrencyChecking;
 import org.apache.isis.core.metamodel.spec.feature.ObjectAction;
 import org.apache.isis.viewer.wicket.model.links.LinkAndLabel;
 import org.apache.isis.viewer.wicket.model.mementos.ActionMemento;
 import org.apache.isis.viewer.wicket.model.mementos.ObjectAdapterMemento;
+import org.apache.isis.viewer.wicket.model.models.ActionModel;
 import org.apache.isis.viewer.wicket.model.models.EntityCollectionModel;
+import org.apache.isis.viewer.wicket.model.util.MementoFunctions;
+import org.apache.isis.viewer.wicket.model.util.ObjectAdapterFunctions;
 import org.apache.isis.viewer.wicket.ui.components.widgets.cssmenu.CssMenuItem;
 import org.apache.isis.viewer.wicket.ui.components.widgets.cssmenu.CssMenuLinkFactory;
 import org.apache.isis.viewer.wicket.ui.errors.JGrowlBehaviour;
@@ -61,33 +70,39 @@ final class BulkActionsLinkFactory implements CssMenuLinkFactory {
             @Override
             public void onClick() {
                 final ObjectAction objectAction = actionMemento.getAction();
-                
-                for(ObjectAdapterMemento entityAdapterMemento: model.getToggleMementosList()) {
-                    // REVIEW: have disabled concurrency checking here...
-                    final ObjectAdapter entityAdapter = entityAdapterMemento.getObjectAdapter(ConcurrencyChecking.NO_CHECK);
 
-                    int numParameters = objectAction.getParameterCount();
-                    if(false /*objectAction.isContributed() */) {
-                        // a contributed action
-                        if(numParameters != 1) {
-                            return;
-                        }
-                        if(serviceAdapterMemento == null) {
-                            // not expected
-                            return;
-                        }
-                        final ObjectAdapter serviceAdapter = serviceAdapterMemento.getObjectAdapter(ConcurrencyChecking.NO_CHECK);
-                        objectAction.execute(serviceAdapter, new ObjectAdapter[]{entityAdapter});
-                    } else {
-                        // an entity action
+                try {
+                    final List<ObjectAdapterMemento> toggleMementosList = model.getToggleMementosList();
+                    
+                    // REVIEW: have disabled concurrency checking here...
+                    final Iterable<ObjectAdapter> toggledAdapters = Iterables.transform(toggleMementosList, ObjectAdapterFunctions.fromMemento());
+                    
+                    final List<Object> domainObjects = Lists.newArrayList(Iterables.transform(toggledAdapters, ObjectAdapter.Functions.getObject()));
+                    final Bulk.InteractionContext interactionContext = new Bulk.InteractionContext(domainObjects);
+                    Bulk.InteractionContext.current.set(interactionContext);
+                    
+                    int i=0;
+                    for(final ObjectAdapter adapter : toggledAdapters) {
+    
+                        int numParameters = objectAction.getParameterCount();
                         if(numParameters != 0) {
                             return;
                         }
-                        objectAction.execute(entityAdapter, new ObjectAdapter[]{});
+                        interactionContext.setIndex(i++);
+                        objectAction.execute(adapter, new ObjectAdapter[]{});
                     }
+                } finally {
+                    Bulk.InteractionContext.current.set(null);
                 }
+                
                 model.clearToggleMementosList();
-                model.setObject(persistentAdaptersWithin(model.getObject()));
+                final ActionModel actionModelHint = model.getActionModelHint();
+                if(actionModelHint != null) {
+                    ObjectAdapter resultAdapter = actionModelHint.getObject();
+                    model.setObjectList(resultAdapter);
+                } else {
+                    model.setObject(persistentAdaptersWithin(model.getObject()));
+                }
             }
 
             private List<ObjectAdapter> persistentAdaptersWithin(List<ObjectAdapter> adapters) {

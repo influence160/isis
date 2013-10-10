@@ -51,6 +51,8 @@ import org.apache.isis.objectstore.jdo.metamodel.facets.object.persistencecapabl
 import org.apache.isis.objectstore.jdo.metamodel.facets.object.query.JdoQueryAnnotationFacetFactory;
 import org.apache.isis.objectstore.jdo.metamodel.facets.prop.column.BigDecimalDerivedFromJdoColumnAnnotationFacetFactory;
 import org.apache.isis.objectstore.jdo.metamodel.facets.prop.column.MandatoryFromJdoColumnAnnotationFacetFactory;
+import org.apache.isis.objectstore.jdo.metamodel.facets.prop.column.MaxLengthDerivedFromJdoColumnAnnotationFacetFactory;
+import org.apache.isis.objectstore.jdo.metamodel.facets.prop.notpersistent.JdoNotPersistentAnnotationFacetFactory;
 import org.apache.isis.objectstore.jdo.metamodel.facets.prop.primarykey.JdoPrimaryKeyAnnotationFacetFactory;
 import org.apache.isis.objectstore.jdo.metamodel.specloader.validator.JdoMetaModelValidator;
 
@@ -120,6 +122,8 @@ public class DataNucleusPersistenceMechanismInstaller extends PersistenceMechani
         putIfNotPresent(props, "datanucleus.autoCreateSchema", "true");
         putIfNotPresent(props, "datanucleus.validateSchema", "true");
         putIfNotPresent(props, "datanucleus.cache.level2.type", "none");
+        
+        putIfNotPresent(props, "datanucleus.persistenceUnitLoadClasses", "true");
 
         String connectionFactoryName = props.get("datanucleus.ConnectionFactoryName");
         if(connectionFactoryName != null) {
@@ -186,11 +190,13 @@ public class DataNucleusPersistenceMechanismInstaller extends PersistenceMechani
         programmingModel.addFactory(JdoEmbeddedOnlyAnnotationFacetFactory.class);
         
         programmingModel.addFactory(JdoPrimaryKeyAnnotationFacetFactory.class);
+        programmingModel.addFactory(JdoNotPersistentAnnotationFacetFactory.class);
         programmingModel.addFactory(JdoDiscriminatorAnnotationFacetFactory.class);
         
         programmingModel.addFactory(JdoQueryAnnotationFacetFactory.class);
         
         programmingModel.addFactory(BigDecimalDerivedFromJdoColumnAnnotationFacetFactory.class);
+        programmingModel.addFactory(MaxLengthDerivedFromJdoColumnAnnotationFacetFactory.class);
         // must appear after JdoPrimaryKeyAnnotationFacetFactory (above)
         programmingModel.addFactory(MandatoryFromJdoColumnAnnotationFacetFactory.class);
         

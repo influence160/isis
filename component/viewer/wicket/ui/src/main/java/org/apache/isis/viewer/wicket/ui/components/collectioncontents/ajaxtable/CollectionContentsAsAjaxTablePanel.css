@@ -116,6 +116,15 @@
 	float: right;
 }
 
+.collectionContentsAsAjaxTablePanel table.contents img {
+    width: 16px;
+    height: 16px;
+}
+
+.collectionContentsAsAjaxTablePanel table.contents tbody td:first-child {
+    min-width: 20px;
+}
+
 .collectionContentsAsAjaxTablePanel table.contents .navigator  a.first,
 .collectionContentsAsAjaxTablePanel table.contents .navigator  a.prev,
 .collectionContentsAsAjaxTablePanel table.contents .navigator  a.next, 
@@ -177,4 +186,9 @@
     {
     color: #000;
     background-color:#E3E3D9;
+}
+
+/* bootstrap seems to set to 'pointer' */
+.collectionContentsAsAjaxTablePanel label:hover {
+	cursor: default;
 }

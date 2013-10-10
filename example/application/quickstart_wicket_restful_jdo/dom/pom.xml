@@ -30,6 +30,22 @@
 	<name>Quickstart Wicket/Restful/JDO DOM</name>
 
 	<build>
+        <resources>
+            <resource>
+                <filtering>false</filtering>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <filtering>false</filtering>
+                <directory>src/main/java</directory>
+                <includes>
+                    <include>**</include>
+                </includes>
+                <excludes>
+                    <exclude>**/*.java</exclude>
+                </excludes>
+            </resource>
+        </resources>
 		<plugins>
             <plugin>
                 <groupId>org.datanucleus</groupId>
@@ -120,6 +136,23 @@
 			<artifactId>isis-core-unittestsupport</artifactId>
             <scope>test</scope>
 		</dependency>
+
+        <!-- Bytecode libraries (for mocking) -->
+        <dependency>
+            <groupId>asm</groupId>
+            <artifactId>asm</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.objenesis</groupId>
+            <artifactId>objenesis</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>cglib</groupId>
+            <artifactId>cglib-nodep</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!--
         GMAP3: uncomment to use https://github.com/danhaywood/isis-wicket-gmap3 

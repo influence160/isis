@@ -34,7 +34,6 @@ import javax.jdo.spi.PersistenceCapable;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
 import com.google.common.collect.Ordering;
 
 import org.joda.time.LocalDate;
@@ -44,6 +43,7 @@ import org.apache.isis.applib.annotation.Audited;
 import org.apache.isis.applib.annotation.AutoComplete;
 import org.apache.isis.applib.annotation.Bookmarkable;
 import org.apache.isis.applib.annotation.Bulk;
+import org.apache.isis.applib.annotation.Bulk.InteractionContext;
 import org.apache.isis.applib.annotation.CssClass;
 import org.apache.isis.applib.annotation.Disabled;
 import org.apache.isis.applib.annotation.Hidden;
@@ -65,27 +65,51 @@ import org.apache.isis.applib.util.ObjectContracts;
 import org.apache.isis.applib.util.TitleBuffer;
 import org.apache.isis.applib.value.Blob;
 
+import services.ClockService;
+
 @javax.jdo.annotations.PersistenceCapable(identityType=IdentityType.DATASTORE)
-@javax.jdo.annotations.DatastoreIdentity(strategy=javax.jdo.annotations.IdGeneratorStrategy.IDENTITY)
+@javax.jdo.annotations.DatastoreIdentity(
+        strategy=javax.jdo.annotations.IdGeneratorStrategy.IDENTITY,
+         column="id")
+@javax.jdo.annotations.Version(
+        strategy=VersionStrategy.VERSION_NUMBER, 
+        column="version")
+@javax.jdo.annotations.Uniques({
+    @javax.jdo.annotations.Unique(
+            name="ToDoItem_description_must_be_unique", 
+            members={"ownedBy","description"})
+})
 @javax.jdo.annotations.Queries( {
     @javax.jdo.annotations.Query(
-            name="todo_all", language="JDOQL",  
-            value="SELECT FROM dom.todo.ToDoItem WHERE ownedBy == :ownedBy"),
+            name = "todo_all", language = "JDOQL",
+            value = "SELECT "
+                    + "FROM dom.todo.ToDoItem "
+                    + "WHERE ownedBy == :ownedBy"),
     @javax.jdo.annotations.Query(
-        name="todo_notYetComplete", language="JDOQL",  
-        value="SELECT FROM dom.todo.ToDoItem WHERE ownedBy == :ownedBy && complete == false"),
+            name = "todo_notYetComplete", language = "JDOQL",
+            value = "SELECT "
+                    + "FROM dom.todo.ToDoItem "
+                    + "WHERE ownedBy == :ownedBy "
+                    + "   && complete == false"),
     @javax.jdo.annotations.Query(
-            name="todo_complete", language="JDOQL",  
-            value="SELECT FROM dom.todo.ToDoItem WHERE ownedBy == :ownedBy && complete == true"),
+            name = "todo_complete", language = "JDOQL",
+            value = "SELECT "
+                    + "FROM dom.todo.ToDoItem "
+                    + "WHERE ownedBy == :ownedBy "
+                    + "&& complete == true"),
     @javax.jdo.annotations.Query(
-        name="todo_similarTo", language="JDOQL",  
-        value="SELECT FROM dom.todo.ToDoItem WHERE ownedBy == :ownedBy && category == :category"),
+            name = "todo_similarTo", language = "JDOQL",
+            value = "SELECT "
+                    + "FROM dom.todo.ToDoItem "
+                    + "WHERE ownedBy == :ownedBy "
+                    + "&& category == :category"),
     @javax.jdo.annotations.Query(
-            name="todo_autoComplete", language="JDOQL",  
-            value="SELECT FROM dom.todo.ToDoItem WHERE ownedBy == :ownedBy && description.indexOf(:description) >= 0")
+            name = "todo_autoComplete", language = "JDOQL",
+            value = "SELECT "
+                    + "FROM dom.todo.ToDoItem "
+                    + "WHERE ownedBy == :ownedBy && "
+                    + "description.indexOf(:description) >= 0")
 })
-@javax.jdo.annotations.Version(strategy=VersionStrategy.VERSION_NUMBER, column="VERSION")
-@javax.jdo.annotations.Unique(name="ToDoItem_description_must_be_unique", members={"ownedBy","description"})
 @ObjectType("TODO")
 @Audited
 @PublishedObject(ToDoItemChangedPayloadFactory.class)
@@ -116,6 +140,10 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
         }
         return buf.toString();
     }
+    
+    public String iconName() {
+        return "ToDoItem-" + (!isComplete() ? "todo" : "done");
+    }
 
     // //////////////////////////////////////
     // Description (property)
@@ -123,7 +151,7 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
     
     private String description;
 
-    @javax.jdo.annotations.Column(allowsNull="false")
+    @javax.jdo.annotations.Column(allowsNull="false", length=30)
     @RegEx(validation = "\\w[@&:\\-\\,\\.\\+ \\w]*") 
     public String getDescription() {
         return description;
@@ -205,6 +233,16 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
                     ? "Invalid subcategory for category '" + category + "'" 
                     : null;
         }
+        
+        public static Predicate<Subcategory> thoseFor(final Category category) {
+            return new Predicate<Subcategory>() {
+
+                @Override
+                public boolean apply(Subcategory subcategory) {
+                    return category.subcategories().contains(subcategory);
+                }
+            };
+        }
     }
 
     // //////////////////////////////////////
@@ -275,6 +313,18 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
     @CssClass("x-highlight")
     public ToDoItem completed() {
         setComplete(true);
+        
+        // demonstrating the use of ... 
+        final InteractionContext ctxt = InteractionContext.current.get();
+        @SuppressWarnings("unused")
+        List<Object> allObjects = ctxt.getDomainObjects();
+        
+        LOG.debug("completed: "
+                + ctxt.getIndex() +
+                " [" + ctxt.getSize() + "]"
+                + (ctxt.isFirst() ? " (first)" : "")
+                + (ctxt.isLast() ? " (last)" : ""));
+
         return this;
     }
     // disable action dependent on state of object
@@ -282,11 +332,12 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
         return complete ? "Already completed" : null;
     }
 
-    @Named("Undo")
+    @Named("Not done")
     @PublishedAction
     @Bulk
     public ToDoItem notYetCompleted() {
         setComplete(false);
+
         return this;
     }
     // disable action dependent on state of object
@@ -334,7 +385,7 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
 
     private String notes;
 
-    @javax.jdo.annotations.Column(allowsNull="true")
+    @javax.jdo.annotations.Column(allowsNull="true", length=400)
     @Hidden(where=Where.ALL_TABLES)
     @MultiLine(numberOfLines=5)
     public String getNotes() {
@@ -404,9 +455,9 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
 
     
 
-    @javax.jdo.annotations.Persistent(table="TODO_DEPENDENCIES")
-    @javax.jdo.annotations.Join(column="DEPENDING_TODO_ID")
-    @javax.jdo.annotations.Element(column="DEPENDENT_TODO_ID")
+    @javax.jdo.annotations.Persistent(table="ToDoItemDependencies")
+    @javax.jdo.annotations.Join(column="dependingId")
+    @javax.jdo.annotations.Element(column="dependentId")
     private SortedSet<ToDoItem> dependencies = new TreeSet<ToDoItem>();
 
     @SortedBy(DependenciesComparator.class)
@@ -483,7 +534,6 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
     // nb: method is not called "clone()" is inherited by java.lang.Object and
     // (a) has different semantics and (b) is in any case automatically ignored
     // by the framework
-    @CssClass("x-caution")
     public ToDoItem duplicate(
             @Named("Description") 
             String description,
@@ -517,6 +567,7 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
     // //////////////////////////////////////
 
     @Bulk
+    @CssClass("x-caution")
     public List<ToDoItem> delete() {
         container.removeIfNotAlready(this);
         container.informUser("Deleted " + container.titleOf(this));
@@ -543,49 +594,86 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
     }
 
     // //////////////////////////////////////
-    // Filters (static methods)
+    // Predicates
     // //////////////////////////////////////
 
-    public static Predicate<ToDoItem> thoseDue() {
-        return Predicates.and(Predicates.not(thoseComplete()), new Predicate<ToDoItem>() {
-            @Override
-            public boolean apply(final ToDoItem t) {
-                return t.isDue();
-            }
-        });
+    public static class Predicates {
+        
+        public static Predicate<ToDoItem> thoseOwnedBy(final String currentUser) {
+            return new Predicate<ToDoItem>() {
+                @Override
+                public boolean apply(final ToDoItem toDoItem) {
+                    return Objects.equal(toDoItem.getOwnedBy(), currentUser);
+                }
+            };
+        }
+
+        public static Predicate<ToDoItem> thoseNotYetComplete() {
+            return com.google.common.base.Predicates.not(thoseComplete());
+        }
+
+        public static Predicate<ToDoItem> thoseComplete() {
+            return new Predicate<ToDoItem>() {
+                @Override
+                public boolean apply(final ToDoItem t) {
+                    return t.isComplete();
+                }
+            };
+        }
+
+        public static Predicate<ToDoItem> thoseWithSimilarDescription(final String description) {
+            return new Predicate<ToDoItem>() {
+                @Override
+                public boolean apply(final ToDoItem t) {
+                    return t.getDescription().contains(description);
+                }
+            };
+        }
+
+        @SuppressWarnings("unchecked")
+        public static Predicate<ToDoItem> thoseSimilarTo(final ToDoItem toDoItem) {
+            return com.google.common.base.Predicates.and(
+                    thoseNot(toDoItem),
+                    thoseOwnedBy(toDoItem.getOwnedBy()),
+                    thoseCategorised(toDoItem.getCategory()));
+        }
+
+        public static Predicate<ToDoItem> thoseNot(final ToDoItem toDoItem) {
+            return new Predicate<ToDoItem>() {
+                @Override
+                public boolean apply(final ToDoItem t) {
+                    return t != toDoItem;
+                }
+            };
+        }
+
+        public static Predicate<ToDoItem> thoseCategorised(final Category category) {
+            return new Predicate<ToDoItem>() {
+                @Override
+                public boolean apply(final ToDoItem toDoItem) {
+                    return Objects.equal(toDoItem.getCategory(), category);
+                }
+            };
+        }
+
+        public static Predicate<ToDoItem> thoseSubcategorised(
+                final Subcategory subcategory) {
+            return new Predicate<ToDoItem>() {
+                @Override
+                public boolean apply(final ToDoItem t) {
+                    return Objects.equal(t.getSubcategory(), subcategory);
+                }
+            };
+        }
+
+        public static Predicate<ToDoItem> thoseCategorised(
+                final Category category, final Subcategory subcategory) {
+            return com.google.common.base.Predicates.and(
+                    thoseCategorised(category), 
+                    thoseSubcategorised(subcategory)); 
+        }
     }
-
-    public static Predicate<ToDoItem> thoseComplete() {
-        return new Predicate<ToDoItem>() {
-            @Override
-            public boolean apply(final ToDoItem t) {
-                return t.isComplete();
-            }
-        };
-    }
-
-    public static Predicate<ToDoItem> thoseOwnedBy(final String currentUser) {
-        return new Predicate<ToDoItem>() {
-            @Override
-            public boolean apply(final ToDoItem toDoItem) {
-                return Objects.equal(toDoItem.getOwnedBy(), currentUser);
-            }
-
-        };
-    }
-
-    public static Predicate<ToDoItem> thoseSimilarTo(final ToDoItem toDoItem) {
-        return new Predicate<ToDoItem>() {
-            @Override
-            public boolean apply(final ToDoItem eachToDoItem) {
-                return Objects.equal(toDoItem.getCategory(), eachToDoItem.getCategory()) && 
-                       Objects.equal(toDoItem.getOwnedBy(), eachToDoItem.getOwnedBy()) &&
-                       eachToDoItem != toDoItem;
-            }
-
-        };
-    }
-
+    
     // //////////////////////////////////////
     // toString
     // //////////////////////////////////////
@@ -608,7 +696,7 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
     }
 
     // //////////////////////////////////////
-    // Injected
+    // Injected Services
     // //////////////////////////////////////
 
     private DomainObjectContainer container;
@@ -623,6 +711,10 @@ public class ToDoItem implements Comparable<ToDoItem> /*, Locatable*/ { // GMAP3
         this.toDoItems = toDoItems;
     }
 
+    private ClockService clockService;
+    public void injectClockService(ClockService clockService) {
+        this.clockService = clockService;
+    }
     
     // //////////////////////////////////////
     // Extensions

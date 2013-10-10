@@ -130,8 +130,7 @@ public abstract class ScalarPanelTextFieldAbstract<T extends Serializable> exten
     }
 
     protected void addStandardSemantics() {
-        setRequiredIfSpecified();
-        setTextFieldSizeIfSpecified(textField);
+         setRequiredIfSpecified();
     }
 
     private void setRequiredIfSpecified() {

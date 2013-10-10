@@ -19,6 +19,7 @@
 
 package org.apache.isis.viewer.wicket.viewer;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.ServiceLoader;
 
@@ -56,6 +57,10 @@ import org.apache.isis.core.commons.resource.ResourceStreamSourceContextLoaderCl
 import org.apache.isis.core.commons.resource.ResourceStreamSourceCurrentClassClassPath;
 import org.apache.isis.core.commons.resource.ResourceStreamSourceFileSystem;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
+import org.apache.isis.core.metamodel.adapter.oid.Oid;
+import org.apache.isis.core.metamodel.facets.actions.homepage.HomePageFacet;
+import org.apache.isis.core.metamodel.services.ServiceUtil;
+import org.apache.isis.core.metamodel.spec.ObjectSpecification;
 import org.apache.isis.core.runtime.logging.IsisLoggingConfigurer;
 import org.apache.isis.core.runtime.runner.IsisInjectModule;
 import org.apache.isis.core.runtime.system.DeploymentType;
@@ -193,31 +198,38 @@ public class IsisWicketApplication extends AuthenticatedWebApplication implement
      */
     @Override
     protected void init() {
-        super.init();
+        try {
+            super.init();
+    
+            final String webInfDir = getServletContext().getRealPath("/WEB-INF");
+            loggingConfigurer.configureLogging(webInfDir, new String[0]);
+    
+            getRequestCycleSettings().setRenderStrategy(RenderStrategy.REDIRECT_TO_RENDER);
+    
+            getRequestCycleListeners().add(new WebRequestCycleForIsis());
+    
+            getResourceSettings().setParentFolderPlaceholder("$up$");
+            
+            determineDeploymentTypeIfRequired();
+            
+            final IsisConfigurationBuilder isisConfigurationBuilder = createConfigBuilder();
+    
+            final IsisInjectModule isisModule = newIsisModule(deploymentType, isisConfigurationBuilder);
+            final Injector injector = Guice.createInjector(isisModule, newIsisWicketModule());
+            injector.injectMembers(this);
+            
+            final IsisConfiguration configuration = isisConfigurationBuilder.getConfiguration();
+            this.getMarkupSettings().setStripWicketTags(determineStripWicketTags(configuration));
+    
+            this.bookmarkedPagesModel = new BookmarkedPagesModel();
+    
+            initWicketComponentInjection(injector);
+        } catch(RuntimeException ex) {
+            // because Wicket's handling in its WicketFilter (that calls this method) does not log the exception.
+            LOG.error("Failed to initialize", ex);
+            throw ex;
+        }
 
-        final String webInfDir = getServletContext().getRealPath("/WEB-INF");
-        loggingConfigurer.configureLogging(webInfDir, new String[0]);
-
-        getRequestCycleSettings().setRenderStrategy(RenderStrategy.REDIRECT_TO_RENDER);
-
-        getRequestCycleListeners().add(new WebRequestCycleForIsis());
-
-        getResourceSettings().setParentFolderPlaceholder("$up$");
-        
-        determineDeploymentTypeIfRequired();
-        
-        final IsisConfigurationBuilder isisConfigurationBuilder = createConfigBuilder();
-
-        final IsisInjectModule isisModule = newIsisModule(deploymentType, isisConfigurationBuilder);
-        final Injector injector = Guice.createInjector(isisModule, newIsisWicketModule());
-        injector.injectMembers(this);
-        
-        final IsisConfiguration configuration = isisConfigurationBuilder.getConfiguration();
-        this.getMarkupSettings().setStripWicketTags(determineStripWicketTags(configuration));
-
-        this.bookmarkedPagesModel = new BookmarkedPagesModel();
-
-        initWicketComponentInjection(injector);
     }
     
     private void determineDeploymentTypeIfRequired() {
@@ -244,8 +256,14 @@ public class IsisWicketApplication extends AuthenticatedWebApplication implement
 
     @Override
     protected void onDestroy() {
-        IsisContext.shutdown();
-        super.onDestroy();
+        try {
+            IsisContext.shutdown();
+            super.onDestroy();
+        } catch(final RuntimeException ex) {
+            // symmetry with #init()
+            LOG.error("Failed to destroy", ex);
+            throw ex;
+        }
     }
 
     @Override
@@ -386,6 +404,7 @@ public class IsisWicketApplication extends AuthenticatedWebApplication implement
         return pageClassRegistry;
     }
 
+    
     /**
      * Delegates to the {@link #getPageClassRegistry() PageClassRegistry}.
      */
@@ -393,6 +412,7 @@ public class IsisWicketApplication extends AuthenticatedWebApplication implement
     public Class<? extends Page> getHomePage() {
         return getPageClassRegistry().getPageClass(PageType.HOME);
     }
+
 
     /**
      * Delegates to the {@link #getPageClassRegistry() PageClassRegistry}.

@@ -22,15 +22,14 @@ import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 
-import com.google.common.base.Objects;
-import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 
 import dom.todo.ToDoItem.Category;
 import dom.todo.ToDoItem.Subcategory;
 
 import org.joda.time.LocalDate;
 
-import org.apache.isis.applib.AbstractFactoryAndRepository;
+import org.apache.isis.applib.DomainObjectContainer;
 import org.apache.isis.applib.annotation.ActionSemantics;
 import org.apache.isis.applib.annotation.ActionSemantics.Of;
 import org.apache.isis.applib.annotation.Bookmarkable;
@@ -42,14 +41,15 @@ import org.apache.isis.applib.annotation.RegEx;
 import org.apache.isis.applib.clock.Clock;
 import org.apache.isis.applib.query.QueryDefault;
 
+import services.ClockService;
+
 @Named("ToDos")
-public class ToDoItems extends AbstractFactoryAndRepository {
+public class ToDoItems {
 
     // //////////////////////////////////////
     // Identification in the UI
     // //////////////////////////////////////
 
-    @Override
     public String getId() {
         return "toDoItems";
     }
@@ -66,27 +66,32 @@ public class ToDoItems extends AbstractFactoryAndRepository {
     @ActionSemantics(Of.SAFE)
     @MemberOrder(sequence = "1")
     public List<ToDoItem> notYetComplete() {
+        final List<ToDoItem> items = notYetCompleteNoUi();
+        if(items.isEmpty()) {
+            container.informUser("All to-do items have been completed :-)");
+        }
+        return items;
+    }
+
+    @Programmatic
+    public List<ToDoItem> notYetCompleteNoUi() {
         final List<ToDoItem> items;
         if(false) {
             // the naive implementation ...
-            items = allMatches(ToDoItem.class, new Predicate<ToDoItem>() {
-                @Override
-                public boolean apply(final ToDoItem t) {
-                    return ownedByCurrentUser(t) && !t.isComplete();
-                }
-            });
+            items = container.allMatches(ToDoItem.class, 
+                    Predicates.and(
+                        ToDoItem.Predicates.thoseOwnedBy(currentUserName()), 
+                        ToDoItem.Predicates.thoseNotYetComplete()));
         } else {
             // the JDO implementation ...
-            items = allMatches(
+            items = container.allMatches(
                     new QueryDefault<ToDoItem>(ToDoItem.class, 
                             "todo_notYetComplete", 
                             "ownedBy", currentUserName()));
         }
-        if(items.isEmpty()) {
-            getContainer().informUser("All to-do items have been completed :-)");
-        }
         return items;
     }
+
     
     // //////////////////////////////////////
     // Complete (action)
@@ -95,24 +100,28 @@ public class ToDoItems extends AbstractFactoryAndRepository {
     @ActionSemantics(Of.SAFE)
     @MemberOrder(sequence = "2")
     public List<ToDoItem> complete() {
+        final List<ToDoItem> items = completeNoUi();
+        if(items.isEmpty()) {
+            container.informUser("No to-do items have yet been completed :-(");
+        }
+        return items;
+    }
+
+    @Programmatic
+    public List<ToDoItem> completeNoUi() {
         final List<ToDoItem> items;
         if(false) {
             // the naive implementation ...
-            items = allMatches(ToDoItem.class, new Predicate<ToDoItem>() {
-                @Override
-                public boolean apply(final ToDoItem t) {
-                    return ownedByCurrentUser(t) && t.isComplete();
-                }
-            });
+            items = container.allMatches(ToDoItem.class, 
+                    Predicates.and(
+                        ToDoItem.Predicates.thoseOwnedBy(currentUserName()), 
+                        ToDoItem.Predicates.thoseComplete()));
         } else {
             // the JDO implementation ...
-            items = allMatches(
+            items = container.allMatches(
                     new QueryDefault<ToDoItem>(ToDoItem.class, 
                             "todo_complete", 
                             "ownedBy", currentUserName()));
-        }
-        if(items.isEmpty()) {
-            getContainer().informUser("No to-do items have yet been completed :-(");
         }
         return items;
     }
@@ -124,19 +133,32 @@ public class ToDoItems extends AbstractFactoryAndRepository {
 
     @MemberOrder(sequence = "3")
     public ToDoItem newToDo(
-            @RegEx(validation = "\\w[@&:\\-\\,\\.\\+ \\w]*") // words, spaces and selected punctuation
-            @Named("Description") String description, 
-            @Named("Category") Category category,
-            @Named("Subcategory") Subcategory subcategory,
-            @Optional
-            @Named("Due by") LocalDate dueBy,
-            @Optional
-            @Named("Cost") BigDecimal cost) {
+            final @RegEx(validation = "\\w[@&:\\-\\,\\.\\+ \\w]*") @Named("Description") String description, 
+            final @Named("Category") Category category,
+            final @Named("Subcategory") Subcategory subcategory,
+            final @Optional @Named("Due by") LocalDate dueBy,
+            final @Optional @Named("Cost") BigDecimal cost) {
         final String ownedBy = currentUserName();
         return newToDo(description, category, subcategory, ownedBy, dueBy, cost);
     }
     public LocalDate default3NewToDo() {
         return new LocalDate(Clock.getTime()).plusDays(14);
+    }
+    public Category default1NewToDo() {
+        return Category.Professional;
+    }
+    public Subcategory default2NewToDo() {
+        return Category.Professional.subcategories().get(0);
+    }
+    public List<Subcategory> choices2NewToDo(
+            final String description, final Category category) {
+        return Subcategory.listFor(category);
+    }
+    public String validateNewToDo(
+            final String description, 
+            final Category category, final Subcategory subcategory, 
+            final LocalDate dueBy, final BigDecimal cost) {
+        return Subcategory.validate(category, subcategory);
     }
 
     // //////////////////////////////////////
@@ -147,10 +169,10 @@ public class ToDoItems extends AbstractFactoryAndRepository {
     @MemberOrder(sequence = "4")
     public List<ToDoItem> allToDos() {
         final String currentUser = currentUserName();
-        final List<ToDoItem> items = allMatches(ToDoItem.class, ToDoItem.thoseOwnedBy(currentUser));
+        final List<ToDoItem> items = container.allMatches(ToDoItem.class, ToDoItem.Predicates.thoseOwnedBy(currentUser));
         Collections.sort(items);
         if(items.isEmpty()) {
-            getContainer().warnUser("No to-do items found.");
+            container.warnUser("No to-do items found.");
         }
         return items;
     }
@@ -163,22 +185,20 @@ public class ToDoItems extends AbstractFactoryAndRepository {
     public List<ToDoItem> autoComplete(final String description) {
         if(false) {
             // the naive implementation ...
-            return allMatches(ToDoItem.class, new Predicate<ToDoItem>() {
-                @Override
-                public boolean apply(final ToDoItem t) {
-                    return ownedByCurrentUser(t) && t.getDescription().contains(description);
-                }
-                
-            });
+            return container.allMatches(ToDoItem.class, 
+                    Predicates.and(
+                        ToDoItem.Predicates.thoseOwnedBy(currentUserName()), 
+                        ToDoItem.Predicates.thoseWithSimilarDescription(description)));
         } else {
             // the JDO implementation ...
-            return allMatches(
+            return container.allMatches(
                     new QueryDefault<ToDoItem>(ToDoItem.class, 
                             "todo_autoComplete", 
                             "ownedBy", currentUserName(), 
                             "description", description));
         }
     }
+
 
     // //////////////////////////////////////
     // Programmatic Helpers
@@ -191,7 +211,7 @@ public class ToDoItems extends AbstractFactoryAndRepository {
             final Subcategory subcategory,
             final String userName, 
             final LocalDate dueBy, final BigDecimal cost) {
-        final ToDoItem toDoItem = newTransientInstance(ToDoItem.class);
+        final ToDoItem toDoItem = container.newTransientInstance(ToDoItem.class);
         toDoItem.setDescription(description);
         toDoItem.setCategory(category);
         toDoItem.setSubcategory(subcategory);
@@ -205,7 +225,7 @@ public class ToDoItems extends AbstractFactoryAndRepository {
         //    new Location(51.5172+random(-0.05, +0.05), 0.1182 + random(-0.05, +0.05)));
         //
         
-        persist(toDoItem);
+        container.persist(toDoItem);
         return toDoItem;
     }
     
@@ -213,12 +233,26 @@ public class ToDoItems extends AbstractFactoryAndRepository {
         return Math.random() * (to-from) + from;
     }
 
+    private String currentUserName() {
+        return container.getUser().getName();
+    }
+
     
-    protected boolean ownedByCurrentUser(final ToDoItem t) {
-        return Objects.equal(t.getOwnedBy(), currentUserName());
+    // //////////////////////////////////////
+    // Injected Services
+    // //////////////////////////////////////
+
+    
+    private DomainObjectContainer container;
+
+    public void injectDomainObjectContainer(final DomainObjectContainer container) {
+        this.container = container;
     }
-    protected String currentUserName() {
-        return getContainer().getUser().getName();
+
+    private ClockService clockService;
+    public void injectClockService(ClockService clockService) {
+        this.clockService = clockService;
     }
+
 
 }

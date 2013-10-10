@@ -33,6 +33,7 @@ import org.apache.isis.core.commons.exceptions.IsisException;
 import org.apache.isis.core.metamodel.adapter.ObjectAdapter;
 import org.apache.isis.core.metamodel.adapter.ResolveState;
 import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager;
+import org.apache.isis.core.metamodel.adapter.mgr.AdapterManager.ConcurrencyChecking;
 import org.apache.isis.core.metamodel.adapter.oid.Oid;
 import org.apache.isis.core.metamodel.adapter.oid.RootOid;
 import org.apache.isis.core.metamodel.adapter.version.ConcurrencyException;
@@ -91,7 +92,7 @@ public class FrameworkSynchronizer {
                        otherVersion != null && 
                        thisVersion.different(otherVersion)) {
 
-                        if(ConcurrencyException.concurrencyChecking.get().isChecking()) {
+                        if(ConcurrencyChecking.isCurrentlyEnabled()) {
                             LOG.info("concurrency conflict detected on " + thisOid + " (" + otherVersion + ")");
                             final String currentUser = getAuthenticationSession().getUserName();
                             final ConcurrencyException abortCause = new ConcurrencyException(currentUser, thisOid, thisVersion, otherVersion);
@@ -103,7 +104,7 @@ public class FrameworkSynchronizer {
                     }
                 } else {
                     final OidGenerator oidGenerator = getOidGenerator();
-                    originalOid = oidGenerator.createPersistent(pojo, null);
+                    originalOid = oidGenerator.createPersistentOrViewModelOid(pojo, null);
                     
                     // it appears to be possible that there is already an adapter for this Oid, 
                     // ie from ObjectStore#resolveImmediately()
@@ -146,7 +147,7 @@ public class FrameworkSynchronizer {
                 Class<? extends CallbackFacet> callbackFacetClass;
                 if (isisOid.isTransient()) {
                     // persisting
-                    final RootOid persistentOid = getOidGenerator().createPersistent(pojo, isisOid);
+                    final RootOid persistentOid = getOidGenerator().createPersistentOrViewModelOid(pojo, isisOid);
                     
                     getPersistenceSession().remapAsPersistent(adapter, persistentOid);
 
@@ -219,7 +220,7 @@ public class FrameworkSynchronizer {
                 if(getJdoPersistenceManager().getObjectId(pojo) == null) {
                     return null;
                 }
-                final RootOid oid = getPersistenceSession().getOidGenerator().createPersistent(pojo, null);
+                final RootOid oid = getPersistenceSession().getOidGenerator().createPersistentOrViewModelOid(pojo, null);
                 final ObjectAdapter adapter = getPersistenceSession().mapRecreatedPojo(oid, pojo);
                 return adapter;
             }

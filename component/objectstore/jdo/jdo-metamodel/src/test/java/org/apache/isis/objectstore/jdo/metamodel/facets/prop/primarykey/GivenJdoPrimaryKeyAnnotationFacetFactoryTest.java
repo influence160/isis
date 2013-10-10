@@ -51,10 +51,10 @@ public class GivenJdoPrimaryKeyAnnotationFacetFactoryTest extends AbstractFacetF
 
     public void testFeatureTypes() {
         final List<FeatureType> featureTypes = facetFactory.getFeatureTypes();
-        Assert.assertFalse(contains(featureTypes, FeatureType.OBJECT));
+        assertFalse(contains(featureTypes, FeatureType.OBJECT));
         assertTrue(contains(featureTypes, FeatureType.PROPERTY));
         assertFalse(contains(featureTypes, FeatureType.COLLECTION));
-        Assert.assertFalse(contains(featureTypes, FeatureType.ACTION));
+        assertFalse(contains(featureTypes, FeatureType.ACTION));
         assertFalse(contains(featureTypes, FeatureType.ACTION_PARAMETER));
     }
 
@@ -75,7 +75,7 @@ public class GivenJdoPrimaryKeyAnnotationFacetFactoryTest extends AbstractFacetF
 
         final Facet facet = facetedMethod.getFacet(MandatoryFacet.class);
         assertNotNull(facet);
-        Assert.assertTrue(facet instanceof OptionalFacetDerivedFromJdoPrimaryKeyAnnotation);
+        assertTrue(facet instanceof OptionalFacetDerivedFromJdoPrimaryKeyAnnotation);
     }
 
     public void testDisabledDerivedFromId() throws Exception {
@@ -85,7 +85,7 @@ public class GivenJdoPrimaryKeyAnnotationFacetFactoryTest extends AbstractFacetF
 
         final Facet facet = facetedMethod.getFacet(DisabledFacet.class);
         assertNotNull(facet);
-        Assert.assertTrue(facet instanceof DisabledFacetDerivedFromJdoPrimaryKeyAnnotation);
+        assertTrue(facet instanceof DisabledFacetDerivedFromJdoPrimaryKeyAnnotation);
     }
 
     public void testIfNoIdAnnotationThenNoFacet() throws Exception {

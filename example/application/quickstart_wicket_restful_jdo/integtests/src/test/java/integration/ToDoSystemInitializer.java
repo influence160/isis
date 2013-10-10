@@ -16,6 +16,7 @@
  */
 package integration;
 
+import app.ToDoItemAnalysis;
 import dom.todo.ToDoItemContributions;
 import dom.todo.ToDoItems;
 
@@ -55,6 +56,7 @@ public class ToDoSystemInitializer {
             
             withServices(
                     new ToDoItems(),
+                    new ToDoItemAnalysis(),
                     new ToDoItemContributions(),
                     new WrapperFactoryDefault(),
                     new RegisterEntities(),
@@ -72,6 +74,8 @@ public class ToDoSystemInitializer {
             testConfiguration.add(DataNucleusObjectStore.INSTALL_FIXTURES_KEY , "true");
             
             testConfiguration.add("isis.persistor.datanucleus.impl.datanucleus.cache.level2.type","none");
+
+            testConfiguration.add("isis.persistor.datanucleus.impl.datanucleus.identifier.case", "PreserveCase");
 
             return testConfiguration;
         }
